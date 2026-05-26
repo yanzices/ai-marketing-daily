@@ -75,35 +75,33 @@ def analyze_with_claude(posts):
         print("Nenhum post para analisar.")
         return []
 
-    print(f"Chave API presente: {'Sim' if ANTHROPIC_API_KEY else 'NAO - CHAVE VAZIA'}")
-    print(f"Primeiros 8 chars da chave: {ANTHROPIC_API_KEY[:8] if ANTHROPIC_API_KEY else 'VAZIO'}")
+    print(f"Chave API presente: {'Sim' if ANTHROPIC_API_KEY else 'NAO'}")
+    print(f"Primeiros 8 chars: {ANTHROPIC_API_KEY[:8] if ANTHROPIC_API_KEY else 'VAZIO'}")
 
-    posts_text = "\n".join([f"- {p['title']} | {p['link']}" for p in posts[:60]])
+    posts_limitados = posts[:30]
+    posts_text = ""
+    for i, p in enumerate(posts_limitados):
+        titulo = p['title'].replace('"', "'").replace('\n', ' ').replace('\r', '')[:150]
+        posts_text += f"{i+1}. {titulo}\n   Link: {p['link']}\n\n"
 
-    prompt = f"""Você é um curador de conteúdo especializado em IA, Marketing e Mídia Paga para profissionais brasileiros.
+    prompt = """Analise estes artigos e selecione os 10 mais relevantes para profissionais de marketing digital brasileiro, focando em IA, Marketing e Midia Paga.
 
-Analise estes artigos coletados hoje:
+Para cada um retorne JSON com: titulo (em portugues), categoria (IA/Marketing/Midia Paga), resumo (2 frases), link.
 
-{posts_text}
+Retorne APENAS o JSON, sem texto adicional:
+{"posts": [{"titulo": "...", "categoria": "...", "resumo": "...", "link": "..."}]}
 
-Selecione os 12 mais relevantes para profissionais de marketing digital. Foque em:
-- Novidades de ferramentas de IA para marketing
-- Estratégias de mídia paga (Google Ads, Meta Ads, TikTok Ads)
-- Tendências de marketing digital
-- Cases e dados de performance
+Artigos:
 
-Exclua: conteúdo político, entretenimento, esportes, notícias sem relação com marketing.
-
-Retorne APENAS um JSON válido, sem markdown, sem texto antes ou depois:
-{{"posts": [{{"titulo": "título em português claro", "categoria": "IA", "resumo": "2 frases explicando o que é e por que importa", "link": "url original"}}]}}
-
-Categorias válidas: IA, Marketing, Mídia Paga"""
+""" + posts_text
 
     payload = json.dumps({
         "model": "claude-sonnet-4-6",
-        "max_tokens": 3000,
+        "max_tokens": 2000,
         "messages": [{"role": "user", "content": prompt}]
-    }).encode("utf-8")
+    }, ensure_ascii=True).encode("utf-8")
+
+    print(f"Tamanho do payload: {len(payload)} bytes")
 
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
@@ -115,13 +113,17 @@ Categorias válidas: IA, Marketing, Mídia Paga"""
         }
     )
 
-    with urllib.request.urlopen(req, timeout=60) as r:
-        response = json.loads(r.read())
-
-    text = response["content"][0]["text"].strip()
-    text = re.sub(r"```json|```", "", text).strip()
-    result = json.loads(text)
-    return result.get("posts", [])
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            response = json.loads(r.read())
+        text = response["content"][0]["text"].strip()
+        text = re.sub(r"```json|```", "", text).strip()
+        result = json.loads(text)
+        return result.get("posts", [])
+    except urllib.error.HTTPError as e:
+        print(f"Erro HTTP {e.code}: {e.reason}")
+        print(f"Resposta da API: {e.read().decode('utf-8', errors='ignore')}")
+        return []
 
 def generate_html(posts):
     today = datetime.now(timezone.utc).strftime("%d/%m/%Y")
@@ -129,7 +131,7 @@ def generate_html(posts):
     categoria_cores = {
         "IA": {"bg": "#EEF2FF", "text": "#4338CA", "border": "#C7D2FE"},
         "Marketing": {"bg": "#F0FDF4", "text": "#15803D", "border": "#BBF7D0"},
-        "Mídia Paga": {"bg": "#FFF7ED", "text": "#C2410C", "border": "#FED7AA"}
+        "Midia Paga": {"bg": "#FFF7ED", "text": "#C2410C", "border": "#FED7AA"}
     }
 
     cards_html = ""
@@ -148,18 +150,18 @@ def generate_html(posts):
                 <a href="{link}" target="_blank" rel="noopener">{titulo}</a>
             </h2>
             <p class="card-summary">{resumo}</p>
-            <a href="{link}" target="_blank" rel="noopener" class="card-link">Ver original →</a>
+            <a href="{link}" target="_blank" rel="noopener" class="card-link">Ver original</a>
         </article>"""
 
     if not cards_html:
-        cards_html = '<p style="text-align:center;color:#6B7280;padding:2rem">Nenhum conteúdo encontrado hoje.</p>'
+        cards_html = '<p style="text-align:center;color:#6B7280;padding:2rem">Nenhum conteudo encontrado hoje.</p>'
 
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Marketing Daily — {today}</title>
+    <title>AI Marketing Daily - {today}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #F9FAFB; color: #111827; line-height: 1.6; }}
@@ -183,12 +185,12 @@ def generate_html(posts):
 <body>
     <header>
         <h1>AI Marketing Daily</h1>
-        <p>Os melhores conteúdos sobre IA, Marketing e Mídia Paga — {today}</p>
+        <p>Os melhores conteudos sobre IA, Marketing e Midia Paga - {today}</p>
     </header>
     <div class="container">
         <div class="grid">{cards_html}</div>
     </div>
-    <footer>Curado automaticamente com Claude · Atualizado em {today}</footer>
+    <footer>Curado automaticamente com Claude - Atualizado em {today}</footer>
 </body>
 </html>"""
 
@@ -201,7 +203,7 @@ def main():
     print(f"Total coletado: {len(posts)} posts\n")
 
     if not posts:
-        print("Nenhum post coletado. Gerando página vazia.")
+        print("Nenhum post coletado. Gerando pagina vazia.")
         html = generate_html([])
     else:
         print("2. Analisando com Claude...")
