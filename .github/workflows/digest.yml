@@ -1,0 +1,32 @@
+name: Daily AI Marketing Digest
+
+on:
+  schedule:
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Executar script
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python generate_digest.py
+
+      - name: Publicar site
+        run: |
+          git config user.name "Digest Bot"
+          git config user.email "bot@digest.com"
+          git add index.html
+          git diff --staged --quiet || git commit -m "digest: $(date +'%d/%m/%Y')"
+          git push
