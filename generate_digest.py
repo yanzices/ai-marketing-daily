@@ -100,7 +100,7 @@ Retorne APENAS um JSON válido, sem markdown, sem texto antes ou depois:
 Categorias válidas: IA, Marketing, Mídia Paga"""
 
     payload = json.dumps({
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-6",
         "max_tokens": 3000,
         "messages": [{"role": "user", "content": prompt}]
     }).encode("utf-8")
